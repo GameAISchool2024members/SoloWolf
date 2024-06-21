@@ -3,7 +3,20 @@
 --- !u!78 &1
 TagManager:
   serializedVersion: 2
-  tags: []
+  tags:
+  - Powerpellet
+  - Pellet
+  - Ghost
+  - Wall
+  - Spaceship
+  - ground
+  - Obstacle
+  - agent
+  - wall
+  - badFood
+  - food
+  - Asteroid
+  - Pole
   layers:
   - Default
   - TransparentFX

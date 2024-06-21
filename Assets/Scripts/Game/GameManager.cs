@@ -3,6 +3,13 @@ using UnityEngine.UI;
 using System.Collections.Generic;
 using UnityEngine.UIElements;
 using System.Collections;
+using Unity.MLAgents;
+using Unity.MLAgents.Actuators;
+using Unity.MLAgents.Sensors;
+using MBaske.Sensors.Grid;
+using Unity.VisualScripting;
+using UnityEngine.Tilemaps;
+
 //using System.Numerics;
 // TODO: Implement game identifiersss
 public class GameManager : MonoBehaviour
@@ -92,8 +99,10 @@ public class GameManager : MonoBehaviour
     public float round_timeElapsed {get ; private set; }
     public float round_startTime {get ; private set; }
     public bool win {get ; private set; }
-    // public Dictionary<Vector2, bool> pelletsPositions = new Dictionary<Vector2, bool>();
-    
+
+    public Tilemap wallTilemap;
+    public List <Vector2Int> walltilepositions = new List<Vector2Int>();
+
 
 
     private void Awake()
@@ -110,6 +119,8 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         NewGame();
+        getTilemapPositions();
+        UpdateMapBuffer_pellet();
     }
 
     private void Update()
@@ -118,16 +129,91 @@ public class GameManager : MonoBehaviour
             NewGame(); 
         }
         round_timeElapsed = Time.time - round_startTime;
+
+        // Update map buffer for the grid sensor
+        UpdateMapBuffer_ghost();
+    }
+
+
+    private void getTilemapPositions()
+    {
+        BoundsInt bounds = wallTilemap.cellBounds;
+        TileBase[] allTiles = wallTilemap.GetTilesBlock(bounds);
+        for (int x = 0; x < bounds.size.x; x++)
+        {
+            for (int y = 0; y < bounds.size.y; y++)
+            {
+                TileBase tile = allTiles[x + y * bounds.size.x];
+                if (tile != null)
+                {
+                    walltilepositions.Add(new Vector2Int(x + bounds.xMin, y + bounds.yMin));
+                }
+            }
+        }
+        // Write wall positions
+        foreach (Vector2Int pos in walltilepositions)
+        {
+            int xIndex = Mathf.RoundToInt(pos.x + pacman.x_transform);
+            int yIndex = Mathf.RoundToInt(pos.y + pacman.y_transform);
+        
+            //Debug.Log($"pos.x: {pos.x}, pos.y: {pos.y}, pacman.x_transform: {pacman.x_transform}, pacman.y_transform: {pacman.y_transform}");
+            //Debug.Log($"Calculated indices - x: {xIndex}, y: {yIndex}");
+
+            pacman.Buffer.Write(pacman.WallChannel, xIndex, yIndex, 1);  
+        }
+        
+    }
+
+    private void UpdateMapBuffer_pellet(){
+    
+        pacman.Buffer.ClearChannel(pacman.PelletChannel);
+        foreach (Transform pellet in this.pellets)
+        {            
+            if (pellet.gameObject.activeSelf && pellet.GetComponent<Pellet>() != null)
+            {
+                Vector2Int pelletPosition = new Vector2Int(Mathf.RoundToInt(pellet.position.x + pacman.x_transform), Mathf.RoundToInt(pellet.position.y + pacman.y_transform));
+                pacman.Buffer.Write(pacman.PelletChannel, pelletPosition.x, pelletPosition.y, 1);
+            }
+        }
+    }
+    private void UpdateMapBuffer_ghost()
+    {
+        
+        Vector2Int[] ghostPositions;
+
+        ghostPositions = new Vector2Int[ghosts.Length];
+        int ghostIndex = 0;
+
+        foreach (Ghost ghost in ghosts)
+        {
+            Vector2 ghostPosition = ghost.transform.position;
+            ghostPositions[ghostIndex] = new Vector2Int((int)ghostPosition.x, (int)ghostPosition.y);
+            ghostIndex++;
+        }
+
+        // Clear buffer
+        pacman.Buffer.ClearChannel(pacman.GhostChannel);
+
+        // Write pellet positions
+
+
+        // Write ghost positions
+        foreach (Vector2Int pos in ghostPositions)
+        {
+            pacman.Buffer.Write(pacman.GhostChannel, Mathf.RoundToInt(pos.x + pacman.x_transform) , Mathf.RoundToInt(pos.y + pacman.y_transform), 1);
+        }
+
+        
+
+
     }
     private void NewGame() // Starts a new game from the starting level
     {
         SetScore(0);
-        SetLives(3);
+        SetLives(1);
         SetLevel(startLevel);
 
         NewRound();
-        
-
     }
 
     private void NewRound() // Starts a new level
@@ -313,6 +399,7 @@ public class GameManager : MonoBehaviour
         //     pelletsPositions[gridPosition] = false; // Set to false indicating the pellet is eaten
         // }
         // gameDatacollector.UpdatePellets(pelletsPositions);
+        UpdateMapBuffer_pellet();
         pellet.gameObject.SetActive(false);
         SetScore (this.score + pellet.points);
         remainingPellets = CountRemainingPellets();
